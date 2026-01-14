@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<!-- 
+Smart City Info Agent — Web UI
+This page provides a simple user interface for interacting with
+the Smart City Info Agent. It allows the user to enter a natural
+language question and displays the agent's structured or textual
+response.
+
+Frontend Flow:
+1. User types a question into the input box.
+2. Browser sends POST request → Flask /ask endpoint.
+3. Flask calls agent → MCP server → APIs.
+4. Response is rendered in either text or structured format.
+
+This file is required for the final project demonstration.
+ -->
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Smart City Info Agent</title>
+
+    <!-- External stylesheet -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+<div id="container">
+    <h1>Smart City Info Agent</h1>
+
+    <!-- User question input -->
+    <input id="question" placeholder="Ask something… (e.g., 'coffee near PSU')" />
+
+    <!-- Trigger call to backend -->
+    <button onclick="askAgent()">Ask</button>
+
+    <!-- Where the answer appears -->
+    <div id="answer">Waiting for your question.</div>
+</div>
+
+
+<script>
+
+// Main function: Send question → backend → update UI
+
+async function askAgent() {
+    const question = document.getElementById("question").value;
+    const answerBox = document.getElementById("answer");
+
+    answerBox.innerHTML = "Thinking...";
+
+    const response = await fetch("http://127.0.0.1:5001/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question })
+    });
+
+    const data = await response.json();
+
+    // Backend returned plain text
+    if (typeof data.answer === "string") {
+        try {
+            // Try to parse JSON response
+            const parsed = JSON.parse(data.answer);
+            answerBox.innerHTML = renderStructuredResponse(parsed);
+        } catch {
+            // Plain text fallback
+            answerBox.innerHTML = data.answer;
+        }
+        return;
+    }
+
+    // No structured answer received
+    answerBox.innerHTML = "No response received.";
+}
+
+
+
+
+// Render structured JSON response into clean HTML sections
+
+function renderStructuredResponse(obj) {
+    let html = "";
+
+  
+    // WEATHER SECTION
+   
+    if (obj.get_weather) {
+        const w = obj.get_weather;
+        html += `
+            <h2>🌤 Weather in ${w.location}</h2>
+            <p><strong>Temperature:</strong> ${w.temperature_c}°C</p>
+            <p><strong>Condition:</strong> ${w.weather}</p>
+            <p><strong>Humidity:</strong> ${w.humidity}%</p>
+            <p><strong>Wind Speed:</strong> ${w.wind_speed} m/s</p>
+            <hr/>
+        `;
+    }
+
+ 
+    // GEOCODING SECTION
+ 
+    if (obj.geocode_location) {
+        const g = obj.geocode_location;
+        html += `
+            <h2>📍 Coordinates</h2>
+            <p><strong>Place:</strong> ${g.display_name}</p>
+            <p><strong>Latitude:</strong> ${g.lat}</p>
+            <p><strong>Longitude:</strong> ${g.lon}</p>
+            <hr/>
+        `;
+    }
+
+    
+    // TRANSLATION SECTION
+   
+    if (obj.translate_text) {
+        html += `
+            <h2>🌐 Translation</h2>
+            <p>${obj.translate_text.translated_text}</p>
+            <hr/>
+        `;
+    }
+
+  
+    // PLACES (Yelp) SECTION
+   
+    if (obj.search_places && obj.search_places.results) {
+        html += `<h2>📍 Places Found</h2><ul>`;
+
+        for (const p of obj.search_places.results) {
+            html += `
+                <li>
+                    <strong>${p.name}</strong> — ⭐ ${p.rating}<br/>
+                    ${p.address}<br/>
+                    <a href="${p.url}" target="_blank">View on Yelp</a>
+                </li><br/>
+            `;
+        }
+
+        html += `</ul><hr/>`;
+    }
+
+   
+    // AUTO-TRANSLATED PLACE NAMES
+  
+    if (obj.translations) {
+        html += `<h2>🌐 Translated Names</h2><ul>`;
+
+        obj.translations.forEach(t => {
+            html += `
+                <li><strong>${t.original}</strong> → ${t.translated}</li>
+            `;
+        });
+
+        html += `</ul><hr/>`;
+    }
+
+    return html || "<p>No structured data returned.</p>";
+}
+</script>
+
+</body>
+</html>
